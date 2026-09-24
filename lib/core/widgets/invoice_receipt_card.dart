@@ -12,6 +12,7 @@ class InvoiceReceiptCard extends StatelessWidget {
   final String customerPhone;
   final String modelName;
   final String vehicleNo;
+  final String meterReading;
   final List<Map<String, dynamic>> billItems;
   final double totalAmount;
   final double amountPaid;
@@ -30,6 +31,7 @@ class InvoiceReceiptCard extends StatelessWidget {
     required this.customerPhone,
     required this.modelName,
     required this.vehicleNo,
+    this.meterReading = '',
     required this.billItems,
     required this.totalAmount,
     required this.amountPaid,
@@ -85,7 +87,7 @@ class InvoiceReceiptCard extends StatelessWidget {
                     const Icon(Icons.build_circle_rounded, color: Color(0xFF38BDF8), size: 18),
                     const SizedBox(width: 6),
                     Text(
-                      'AUTOMOTIVE SERVICE RECEIPT',
+                      'SERVICE RECEIPT',
                       style: AppTypography.labelMedium(const Color(0xFF94A3B8)).copyWith(
                         letterSpacing: 1.2,
                         fontSize: 10,
@@ -195,21 +197,42 @@ class InvoiceReceiptCard extends StatelessWidget {
                         color: AppColors.primary.withValues(alpha: isDark ? 0.3 : 0.2),
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        const Icon(Icons.directions_car_rounded, size: 14, color: AppColors.primary),
-                        const SizedBox(width: 6),
-                        Text(
-                          [
-                            if (modelName.isNotEmpty) modelName,
-                            if (vehicleNo.isNotEmpty) vehicleNo,
-                          ].join('  •  '),
-                          style: AppTypography.labelMedium(AppColors.primary).copyWith(
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.3,
+                        if (modelName.isNotEmpty || vehicleNo.isNotEmpty) ...[
+                          const Icon(Icons.directions_car_rounded, size: 14, color: AppColors.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            [
+                              if (modelName.isNotEmpty) modelName,
+                              if (vehicleNo.isNotEmpty) vehicleNo,
+                            ].join('  •  '),
+                            style: AppTypography.labelMedium(AppColors.primary).copyWith(
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.3,
+                            ),
                           ),
-                        ),
+                        ],
+                        if (meterReading.isNotEmpty && meterReading != '0') ...[
+                          if (modelName.isNotEmpty || vehicleNo.isNotEmpty)
+                            Text(
+                              '   •   ',
+                              style: AppTypography.labelMedium(AppColors.primary).copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          const Icon(Icons.speed_rounded, size: 14, color: AppColors.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$meterReading km',
+                            style: AppTypography.labelMedium(AppColors.primary).copyWith(
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

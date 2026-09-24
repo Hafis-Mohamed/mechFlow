@@ -9,6 +9,7 @@ import 'customers_tab.dart';
 import 'work_tab.dart';
 import 'profile_tab.dart';
 import 'reports_tab.dart';
+import 'vehicles_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -102,10 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onNavigateToCustomers: () => setState(() => _currentIndex = 1),
       ),
       const WorkTab(),
-      ProfileTab(
-        shopDetails: _shopDetails,
-        onRefreshShopDetails: _loadShopDetails,
-      ),
+      const VehiclesTab(),
     ];
 
     final List<String> titles = [
@@ -113,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
       'Customers',
       _shopDetails?['shop_name'] ?? 'Dashboard',
       'Work Orders',
-      'Shop Profile',
+      'Vehicles',
     ];
 
     return Scaffold(
@@ -157,6 +155,24 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             onPressed: () => themeProvider.toggleTheme(),
           ),
+          IconButton(
+            tooltip: 'Shop Profile',
+            icon: const Icon(Icons.storefront_rounded, color: AppColors.primary),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => Scaffold(
+                    appBar: AppBar(title: const Text('Shop Profile')),
+                    body: ProfileTab(
+                      shopDetails: _shopDetails,
+                      onRefreshShopDetails: _loadShopDetails,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
           const SizedBox(width: 8),
         ],
       ),
@@ -170,53 +186,211 @@ class _HomeScreenState extends State<HomeScreen> {
           children: tabs,
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-          border: Border(
-            top: BorderSide(
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          height: 72,
+          margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
               color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
               width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withOpacity(0.3)
+                    : AppColors.primary.withOpacity(0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(
+                icon: Icons.analytics_rounded,
+                outlineIcon: Icons.analytics_outlined,
+                label: 'Reports',
+                index: 0,
+                isDark: isDark,
+              ),
+              _buildNavItem(
+                icon: Icons.people_rounded,
+                outlineIcon: Icons.people_outline_rounded,
+                label: 'Customers',
+                index: 1,
+                isDark: isDark,
+              ),
+              _buildCenterHomeNavItem(
+                icon: Icons.home_rounded,
+                outlineIcon: Icons.home_outlined,
+                label: 'Home',
+                index: 2,
+                isDark: isDark,
+              ),
+              _buildNavItem(
+                icon: Icons.handyman_rounded,
+                outlineIcon: Icons.handyman_outlined,
+                label: 'Work',
+                index: 3,
+                isDark: isDark,
+              ),
+              _buildNavItem(
+                icon: Icons.directions_car_rounded,
+                outlineIcon: Icons.directions_car_outlined,
+                label: 'Vehicles',
+                index: 4,
+                isDark: isDark,
+              ),
+            ],
           ),
         ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          indicatorColor: AppColors.primary.withValues(alpha: 0.15),
-          onDestinationSelected: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.bar_chart_outlined),
-              selectedIcon: Icon(Icons.bar_chart_rounded, color: AppColors.primary),
-              label: 'Reports',
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required IconData icon,
+    required IconData outlineIcon,
+    required String label,
+    required int index,
+    required bool isDark,
+  }) {
+    final isSelected = _currentIndex == index;
+    final activeColor = AppColors.primary;
+    final inactiveColor =
+        isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _currentIndex = index),
+          borderRadius: BorderRadius.circular(16),
+          splashColor: activeColor.withOpacity(0.1),
+          highlightColor: Colors.transparent,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedScale(
+                  scale: isSelected ? 1.15 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  child: Icon(
+                    isSelected ? icon : outlineIcon,
+                    color: isSelected ? activeColor : inactiveColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  style: AppTypography.labelMedium(
+                    isSelected ? activeColor : inactiveColor,
+                  ).copyWith(
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 11,
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.people_outline_rounded),
-              selectedIcon: Icon(Icons.people_rounded, color: AppColors.primary),
-              label: 'Customers',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard_rounded, color: AppColors.primary),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.build_circle_outlined),
-              selectedIcon: Icon(Icons.build_circle_rounded, color: AppColors.primary),
-              label: 'Work',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.storefront_outlined),
-              selectedIcon: Icon(Icons.storefront_rounded, color: AppColors.primary),
-              label: 'Profile',
-            ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterHomeNavItem({
+    required IconData icon,
+    required IconData outlineIcon,
+    required String label,
+    required int index,
+    required bool isDark,
+  }) {
+    final isSelected = _currentIndex == index;
+    final activeColor = AppColors.primary;
+    final inactiveColor =
+        isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _currentIndex = index),
+          borderRadius: BorderRadius.circular(16),
+          splashColor: activeColor.withOpacity(0.15),
+          highlightColor: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  gradient: isSelected ? AppColors.primaryGradient : null,
+                  color: isSelected
+                      ? null
+                      : (isDark
+                          ? AppColors.darkSurfaceSecondary
+                          : AppColors.lightSurfaceSecondary),
+                  shape: BoxShape.circle,
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.4),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: AnimatedScale(
+                  scale: isSelected ? 1.1 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    isSelected ? icon : outlineIcon,
+                    color: isSelected ? Colors.white : inactiveColor,
+                    size: 24,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                style: AppTypography.labelMedium(
+                  isSelected ? activeColor : inactiveColor,
+                ).copyWith(
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  fontSize: 11,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+

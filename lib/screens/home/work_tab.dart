@@ -72,6 +72,7 @@ class _WorkTabState extends State<WorkTab> {
     required String modelName,
     required String workDescription,
     required String status,
+    String? meterReading,
   }) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
@@ -89,6 +90,7 @@ class _WorkTabState extends State<WorkTab> {
         'model_name': modelName,
         'work_description': workDescription,
         'status': status,
+        if (meterReading != null && meterReading.isNotEmpty) 'meter_reading': meterReading,
       });
 
       if (mounted) {
@@ -142,6 +144,7 @@ class _WorkTabState extends State<WorkTab> {
     TextEditingController? customerSearchController;
     final vehicleNoController = TextEditingController();
     final modelNameController = TextEditingController();
+    final meterReadingController = TextEditingController();
     final workController = TextEditingController();
 
     List<Map<String, String>> customerVehicles = [];
@@ -314,6 +317,19 @@ class _WorkTabState extends State<WorkTab> {
                             label: 'Customer (Name or Phone)',
                             hint: 'Type customer name to search...',
                             prefixIcon: Icons.search_rounded,
+                            inputFormatters: [
+                              TextInputFormatter.withFunction((oldValue, newValue) {
+                                if (newValue.text.isEmpty) return newValue;
+                                StringBuffer newText = StringBuffer();
+                                bool capNext = true;
+                                for (int i = 0; i < newValue.text.length; i++) {
+                                  final char = newValue.text[i];
+                                  if (char.trim().isEmpty) { capNext = true; newText.write(char); }
+                                  else { newText.write(capNext ? char.toUpperCase() : char); capNext = false; }
+                                }
+                                return newValue.copyWith(text: newText.toString());
+                              }),
+                            ],
                             onChanged: (value) {
                               if (selectedCustomer != null) {
                                 setModalState(() {
@@ -485,6 +501,19 @@ class _WorkTabState extends State<WorkTab> {
                         label: 'Vehicle Model',
                         hint: 'e.g., Swift Dzire / Royal Enfield',
                         prefixIcon: Icons.directions_car_outlined,
+                        inputFormatters: [
+                          TextInputFormatter.withFunction((oldValue, newValue) {
+                            if (newValue.text.isEmpty) return newValue;
+                            StringBuffer newText = StringBuffer();
+                            bool capNext = true;
+                            for (int i = 0; i < newValue.text.length; i++) {
+                              final char = newValue.text[i];
+                              if (char.trim().isEmpty) { capNext = true; newText.write(char); }
+                              else { newText.write(capNext ? char.toUpperCase() : char); capNext = false; }
+                            }
+                            return newValue.copyWith(text: newText.toString());
+                          }),
+                        ],
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Please enter vehicle model';
@@ -495,10 +524,25 @@ class _WorkTabState extends State<WorkTab> {
                       const SizedBox(height: 16),
 
                       CustomTextField(
+                        controller: meterReadingController,
+                        label: 'Odometer Reading (km)',
+                        hint: 'e.g., 15000',
+                        prefixIcon: Icons.speed_outlined,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 16),
+
+                      CustomTextField(
                         controller: workController,
                         label: 'Work Description / Requirements',
                         hint: 'e.g., Engine oil change, brake servicing',
                         prefixIcon: Icons.build_circle_outlined,
+                        inputFormatters: [
+                          TextInputFormatter.withFunction((oldValue, newValue) {
+                            if (newValue.text.isEmpty) return newValue;
+                            return newValue.copyWith(text: newValue.text[0].toUpperCase() + newValue.text.substring(1));
+                          }),
+                        ],
                         maxLines: 3,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -521,6 +565,7 @@ class _WorkTabState extends State<WorkTab> {
                               modelName: modelNameController.text.trim(),
                               workDescription: workController.text.trim(),
                               status: 'Pending',
+                              meterReading: meterReadingController.text.trim(),
                             );
                             Navigator.pop(context);
                           }

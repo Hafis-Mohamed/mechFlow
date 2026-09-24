@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -19,11 +20,13 @@ import '../../core/widgets/invoice_receipt_card.dart';
 class JobDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> job;
   final VoidCallback onJobUpdated;
+  final bool hideOwnerDetails;
 
   const JobDetailsScreen({
     super.key,
     required this.job,
     required this.onJobUpdated,
+    this.hideOwnerDetails = false,
   });
 
   @override
@@ -45,6 +48,7 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
   String _shopLocation = '';
   String _shopPhone = '';
   int _localJobCount = 0;
+  String _meterReading = '';
 
   @override
   void initState() {
@@ -57,9 +61,94 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
     _currentAmountPaid =
         double.tryParse(widget.job['amount_paid']?.toString() ?? '0') ?? 0.0;
     _paymentMode = widget.job['payment_mode'] ?? 'Cash';
+    final meterRaw = widget.job['meter_reading']?.toString() ?? '';
+    _meterReading = meterRaw.isEmpty ? '0' : meterRaw;
     _fetchBillItems();
     _fetchShopData();
     _fetchLocalJobCount();
+  }
+
+  Future<void> _updateMeterReading(String newReading) async {
+    final jobId = widget.job['id'];
+    if (jobId == null) return;
+    
+    setState(() => _isSavingJob = true);
+    try {
+      await supabase.from('jobs').update({
+        'meter_reading': newReading,
+      }).eq('id', jobId);
+      
+      setState(() {
+        _meterReading = newReading;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Odometer reading updated successfully!'),
+            backgroundColor: AppColors.statusCompleted,
+          ),
+        );
+      }
+      widget.onJobUpdated();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update odometer reading: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingJob = false);
+    }
+  }
+
+  void _showEditMeterReadingDialog() {
+    final controller = TextEditingController(text: _meterReading);
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Update Odometer Reading'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CustomTextField(
+                  controller: controller,
+                  label: 'Odometer Reading (km)',
+                  keyboardType: TextInputType.number,
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) return 'Please enter a reading';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            CustomButton(
+              label: 'Update',
+              isFullWidth: false,
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  _updateMeterReading(controller.text.trim());
+                  Navigator.pop(context);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _fetchLocalJobCount() async {
@@ -262,7 +351,7 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                   child: pw.Column(
                     children: [
                       pw.Text(
-                        'AUTOMOTIVE SERVICE RECEIPT',
+                        'SERVICE RECEIPT',
                         style: pw.TextStyle(
                           color: PdfColor.fromHex('#94A3B8'),
                           fontSize: 8,
@@ -372,6 +461,7 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                         [
                           if (modelName.isNotEmpty) modelName,
                           if (vehicleNo.isNotEmpty) vehicleNo,
+                          if (_meterReading.isNotEmpty && _meterReading != '0') '$_meterReading km',
                         ].join('   -   '),
                         style: pw.TextStyle(
                           color: PdfColor.fromHex('#1E40AF'),
@@ -752,6 +842,12 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                         focusNode: focusNode,
                         label: 'Description',
                         hint: 'e.g., Engine Oil 4L / Labor Charge',
+                        inputFormatters: [
+                          TextInputFormatter.withFunction((oldValue, newValue) {
+                            if (newValue.text.isEmpty) return newValue;
+                            return newValue.copyWith(text: newValue.text[0].toUpperCase() + newValue.text.substring(1));
+                          }),
+                        ],
                         validator: (val) {
                           if (val == null || val.trim().isEmpty) {
                             return 'Enter item description';
@@ -767,6 +863,9 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                     label: 'Cost Price (₹)',
                     hint: 'e.g., 1200',
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   CustomTextField(
@@ -774,6 +873,9 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                     label: 'Selling Price (₹)',
                     hint: 'e.g., 1500',
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                    ],
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) {
                         return 'Enter selling price';
@@ -936,7 +1038,7 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Job #${widget.job['id']}'),
+        title: Text('Job #${_localJobCount > 0 ? _localJobCount : '...'}'),
         actions: [
           if (_status == 'Pending')
             TextButton.icon(
@@ -998,22 +1100,24 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                               vehicleNo,
                               style: AppTypography.labelLarge(AppColors.primary),
                             ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                const Icon(Icons.person_rounded, size: 14, color: AppColors.primary),
-                                const SizedBox(width: 4),
-                                Text(customerName, style: AppTypography.bodySmall(secondaryText)),
-                                if (customerPhone.isNotEmpty) ...[
-                                  const SizedBox(width: 6),
-                                  Text('($customerPhone)', style: AppTypography.bodySmall(secondaryText)),
+                            if (!widget.hideOwnerDetails) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.person_rounded, size: 14, color: AppColors.primary),
+                                  const SizedBox(width: 4),
+                                  Text(customerName, style: AppTypography.bodySmall(secondaryText)),
+                                  if (customerPhone.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Text('($customerPhone)', style: AppTypography.bodySmall(secondaryText)),
+                                  ],
                                 ],
-                              ],
-                            ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
-                      if (customerPhone.isNotEmpty && _status == 'Pending')
+                      if (!widget.hideOwnerDetails && customerPhone.isNotEmpty && _status == 'Pending')
                         IconButton(
                           icon: const Icon(Icons.phone_rounded, color: AppColors.primary),
                           onPressed: () => launchUrl(Uri.parse('tel:$customerPhone')),
@@ -1021,6 +1125,32 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                         ),
                     ],
                   ),
+                  if (_meterReading.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.speed_rounded, size: 18, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Text('Odometer Reading: ', style: AppTypography.bodyMedium(secondaryText)),
+                            Text('$_meterReading km', style: AppTypography.titleSmall(primaryText)),
+                          ],
+                        ),
+                        if (_status != 'Completed')
+                          IconButton(
+                            icon: const Icon(Icons.edit_rounded, size: 20, color: AppColors.primary),
+                            onPressed: _showEditMeterReadingDialog,
+                            tooltip: 'Edit Odometer Reading',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1056,6 +1186,12 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                     controller: _workController,
                     label: '',
                     hint: 'Enter work description...',
+                    inputFormatters: [
+                      TextInputFormatter.withFunction((oldValue, newValue) {
+                        if (newValue.text.isEmpty) return newValue;
+                        return newValue.copyWith(text: newValue.text[0].toUpperCase() + newValue.text.substring(1));
+                      }),
+                    ],
                     maxLines: 3,
                     readOnly: _status == 'Completed',
                   ),
@@ -1069,6 +1205,12 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                     controller: _reviewController,
                     label: '',
                     hint: 'Enter inspection findings or notes...',
+                    inputFormatters: [
+                      TextInputFormatter.withFunction((oldValue, newValue) {
+                        if (newValue.text.isEmpty) return newValue;
+                        return newValue.copyWith(text: newValue.text[0].toUpperCase() + newValue.text.substring(1));
+                      }),
+                    ],
                     maxLines: 2,
                     readOnly: _status == 'Completed',
                   ),
@@ -1250,6 +1392,7 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                 customerPhone: customerPhone,
                 modelName: modelName,
                 vehicleNo: vehicleNo,
+                meterReading: _meterReading,
                 billItems: _billItems,
                 totalAmount: _totalSellingPrice,
                 amountPaid: _currentAmountPaid,
