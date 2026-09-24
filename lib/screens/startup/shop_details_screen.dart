@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shadows.dart';
+import '../../core/theme/app_typography.dart';
+import '../../core/widgets/custom_button.dart';
+import '../../core/widgets/custom_text_field.dart';
+import '../../core/widgets/glass_container.dart';
 import '../home/home_screen.dart';
 
 class ShopDetailsScreen extends StatefulWidget {
-  const ShopDetailsScreen({super.key});
+  final Map<String, dynamic>? initialData;
+  const ShopDetailsScreen({super.key, this.initialData});
 
   @override
   State<ShopDetailsScreen> createState() => _ShopDetailsScreenState();
@@ -23,7 +30,13 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
   void initState() {
     super.initState();
     final user = supabase.auth.currentUser;
-    _emailController = TextEditingController(text: user?.email ?? '');
+    _emailController = TextEditingController(text: widget.initialData?['email'] ?? user?.email ?? '');
+    
+    if (widget.initialData != null) {
+      _shopNameController.text = widget.initialData!['shop_name'] ?? '';
+      _locationController.text = widget.initialData!['location'] ?? '';
+      _phoneController.text = widget.initialData!['phone'] ?? '';
+    }
   }
 
   Future<void> _saveShopDetails() async {
@@ -37,7 +50,6 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
         throw const AuthException('No logged-in user session found.');
       }
 
-      // Save email along with shop_name, location, phone
       await supabase.from('shops').upsert({
         'id': user.id,
         'email': _emailController.text.trim(),
@@ -49,12 +61,17 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Shop details saved successfully!')),
+          const SnackBar(
+            content: Text('Shop details saved successfully!'),
+            backgroundColor: AppColors.statusCompleted,
+          ),
         );
 
-        // Navigate to Home screen
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const HomeScreen(),
+            transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
+          ),
           (route) => false,
         );
       }
@@ -63,7 +80,7 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Database error: ${error.message}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -72,7 +89,7 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error saving shop details: $error'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -92,119 +109,136 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryText = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+    final secondaryText = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Setup Shop Details'),
-        automaticallyImplyLeading: false, // Prevent going back without saving
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(
-                  Icons.storefront,
-                  size: 80,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Tell us about your Workshop',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter your shop details to complete setup',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[600],
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                TextFormField(
-                  controller: _emailController,
-                  readOnly: true, // Display account email automatically
-                  decoration: const InputDecoration(
-                    labelText: 'Account Email',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
-                    filled: true,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _shopNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Shop Name',
-                    hintText: 'e.g., Haris Auto Garage',
-                    prefixIcon: Icon(Icons.business),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your shop name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _locationController,
-                  decoration: const InputDecoration(
-                    labelText: 'Location / Address',
-                    hintText: 'e.g., 123 Main Street, Downtown',
-                    prefixIcon: Icon(Icons.location_on_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your shop location';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Contact Phone Number (Optional)',
-                    hintText: 'e.g., +1 555 0199',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _saveShopDetails,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text(
-                          'Save & Continue',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                ),
-              ],
+      body: Stack(
+        children: [
+          Positioned(
+            top: -80,
+            right: -80,
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.primary.withValues(alpha: 0.15),
+              ),
             ),
           ),
-        ),
+          if (Navigator.canPop(context))
+            Positioned(
+              top: 10,
+              left: 10,
+              child: SafeArea(
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded, size: 28),
+                  onPressed: () => Navigator.pop(context),
+                  color: primaryText,
+                ),
+              ),
+            ),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+                child: GlassContainer(
+                  padding: const EdgeInsets.all(28.0),
+                  borderRadius: BorderRadius.circular(28),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: AppColors.primaryGradient,
+                              boxShadow: AppShadows.glowPrimary,
+                            ),
+                            child: const Icon(
+                              Icons.storefront_rounded,
+                              size: 36,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Workshop Profile',
+                          style: AppTypography.displayMedium(primaryText),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Enter your shop details to complete setup',
+                          style: AppTypography.bodyMedium(secondaryText),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 32),
+
+                        CustomTextField(
+                          controller: _emailController,
+                          label: 'Account Email',
+                          prefixIcon: Icons.email_outlined,
+                        ),
+                        const SizedBox(height: 18),
+
+                        CustomTextField(
+                          controller: _shopNameController,
+                          label: 'Shop Name',
+                          hint: 'e.g., Haris Auto Garage',
+                          prefixIcon: Icons.business_rounded,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your shop name';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 18),
+
+                        CustomTextField(
+                          controller: _locationController,
+                          label: 'Location / Address',
+                          hint: 'e.g., 123 Main Street, Downtown',
+                          prefixIcon: Icons.location_on_outlined,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your shop location';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 18),
+
+                        CustomTextField(
+                          controller: _phoneController,
+                          label: 'Contact Phone Number (Optional)',
+                          hint: 'e.g., +1 555 0199',
+                          prefixIcon: Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 28),
+
+                        CustomButton(
+                          label: 'Save & Continue',
+                          isLoading: _isLoading,
+                          onPressed: _saveShopDetails,
+                          icon: Icons.arrow_forward_rounded,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

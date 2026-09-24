@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../main.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shadows.dart';
+import '../../core/theme/app_typography.dart';
+import '../../core/widgets/custom_button.dart';
+import '../../core/widgets/pressable_scale.dart';
+import '../../core/widgets/shimmer_loading.dart';
 
-class HomeTab extends StatelessWidget {
+class HomeTab extends StatefulWidget {
   final Map<String, dynamic>? shopDetails;
   final VoidCallback onNavigateToWork;
   final VoidCallback onNavigateToCustomers;
@@ -14,71 +20,161 @@ class HomeTab extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  State<HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<HomeTab> {
+  int _activeJobsCount = 0;
+  int _completedTodayCount = 0;
+  int _totalCustomersCount = 0;
+  int _pendingJobsCount = 0;
+  
+  double _todayRevenue = 0;
+  double _todayExpense = 0;
+  double _todayProfit = 0;
+
+  bool _isLoadingCounts = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLiveCounts();
+  }
+
+  Future<void> _fetchLiveCounts() async {
     final user = supabase.auth.currentUser;
-    final shopName = shopDetails?['shop_name'] ?? 'My Workshop';
-    final location = shopDetails?['location'] ?? 'Location not set';
+    if (user == null) {
+      if (mounted) setState(() => _isLoadingCounts = false);
+      return;
+    }
+
+    try {
+      final jobsResponse = await supabase
+          .from('jobs')
+          .select('id, status, created_at, amount_paid, bill_items(actual_price)')
+          .eq('shop_id', user.id);
+
+      final jobs = List<Map<String, dynamic>>.from(jobsResponse);
+
+      final now = DateTime.now();
+      final todayStr = DateTime(now.year, now.month, now.day).toIso8601String().split('T')[0];
+
+      int active = 0;
+      int pending = 0;
+      int completedToday = 0;
+      
+      double dailyRev = 0;
+      double dailyExp = 0;
+
+      for (var job in jobs) {
+        final status = (job['status'] ?? '').toString().toLowerCase();
+        if (status == 'in progress' || status == 'in_progress') {
+          active++;
+        } else if (status == 'pending') {
+          pending++;
+        } else if (status == 'completed') {
+          final createdAt = job['created_at']?.toString() ?? '';
+          if (createdAt.startsWith(todayStr)) {
+            completedToday++;
+            
+            final amount = double.tryParse(job['amount_paid']?.toString() ?? '0') ?? 0.0;
+            dailyRev += amount;
+            
+            final billItems = job['bill_items'] as List<dynamic>? ?? [];
+            for (var item in billItems) {
+              if (item is Map) {
+                final actualPrice = double.tryParse(item['actual_price']?.toString() ?? '0') ?? 0.0;
+                dailyExp += actualPrice;
+              }
+            }
+          }
+        }
+      }
+
+      // Customers count
+      final customersResponse = await supabase
+          .from('customers')
+          .select('id')
+          .eq('shop_id', user.id);
+
+      final customerCount = (customersResponse as List).length;
+
+      if (mounted) {
+        setState(() {
+          _activeJobsCount = active;
+          _pendingJobsCount = pending;
+          _completedTodayCount = completedToday;
+          _totalCustomersCount = customerCount;
+          _todayRevenue = dailyRev;
+          _todayExpense = dailyExp;
+          _todayProfit = dailyRev - dailyExp;
+          _isLoadingCounts = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingCounts = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryText = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+
+    final user = supabase.auth.currentUser;
+    final shopName = widget.shopDetails?['shop_name'] ?? 'My Workshop';
+    final location = widget.shopDetails?['location'] ?? 'Location not set';
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header Welcome Card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.all(24.0),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.tertiary,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              gradient: AppColors.heroGradient,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: AppShadows.glowPrimary,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      child: const Icon(Icons.build_circle, color: Colors.white),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.storefront_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             shopName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: AppTypography.displayMedium(Colors.white),
+                            overflow: TextOverflow.ellipsis,
                           ),
+                          const SizedBox(height: 2),
                           Row(
                             children: [
-                              const Icon(Icons.location_on, color: Colors.white70, size: 14),
+                              const Icon(Icons.location_on_outlined, color: Colors.white70, size: 14),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
                                   location,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                  ),
+                                  style: AppTypography.bodySmall(Colors.white70),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -89,21 +185,22 @@ class HomeTab extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.verified, color: Colors.amber, size: 16),
-                      const SizedBox(width: 6),
+                      const Icon(Icons.verified_user_rounded, color: Colors.amberAccent, size: 16),
+                      const SizedBox(width: 8),
                       Text(
                         user?.email ?? 'Logged In',
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        style: AppTypography.caption(Colors.white),
                       ),
                     ],
                   ),
@@ -111,103 +208,148 @@ class HomeTab extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
 
-          // Overview Stats Title
+          // Today's Financials
           Text(
-            'Workshop Summary',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            "Today's Financials",
+            style: AppTypography.titleLarge(primaryText),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+          
+          if (_isLoadingCounts)
+            const ShimmerLoading(width: double.infinity, height: 100, borderRadius: 16)
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildFinancialStat('Revenue', _todayRevenue, AppColors.primary, isDark),
+                  _buildFinancialDivider(isDark),
+                  _buildFinancialStat('Expense', _todayExpense, AppColors.error, isDark),
+                  _buildFinancialDivider(isDark),
+                  _buildFinancialStat('Profit', _todayProfit, AppColors.statusCompleted, isDark),
+                ],
+              ),
+            ),
+          const SizedBox(height: 28),
 
-          // Stats Cards Grid
-          GridView.count(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.4,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _buildStatCard(
-                context,
-                title: 'Active Jobs',
-                value: '4',
-                icon: Icons.engineering,
-                color: Colors.orange,
-                onTap: onNavigateToWork,
-              ),
-              _buildStatCard(
-                context,
-                title: 'Completed Today',
-                value: '8',
-                icon: Icons.check_circle_outline,
-                color: Colors.green,
-                onTap: onNavigateToWork,
-              ),
-              _buildStatCard(
-                context,
-                title: 'Total Customers',
-                value: '12',
-                icon: Icons.people_outline,
-                color: Colors.blue,
-                onTap: onNavigateToCustomers,
-              ),
-              _buildStatCard(
-                context,
-                title: 'Pending Work',
-                value: '3',
-                icon: Icons.hourglass_empty,
-                color: Colors.purple,
-                onTap: onNavigateToWork,
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Quick Actions Title
+          // Quick Actions Section
           Text(
             'Quick Actions',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: AppTypography.titleLarge(primaryText),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Action Buttons
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: onNavigateToWork,
-                  icon: const Icon(Icons.add_task),
-                  label: const Text('New Work Order'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                child: CustomButton(
+                  label: 'Work Orders',
+                  icon: Icons.build_circle_outlined,
+                  onPressed: widget.onNavigateToWork,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onNavigateToCustomers,
-                  icon: const Icon(Icons.person_add_alt_1),
-                  label: const Text('Add Customer'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                child: CustomButton(
+                  label: 'Customers',
+                  icon: Icons.person_add_alt_1_outlined,
+                  isOutline: true,
+                  onPressed: widget.onNavigateToCustomers,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 28),
+
+          // Overview Stats Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Workshop Overview',
+                style: AppTypography.titleLarge(primaryText),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                onPressed: _fetchLiveCounts,
+                tooltip: 'Refresh Stats',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Stats Cards Grid
+          if (_isLoadingCounts)
+            GridView.count(
+              crossAxisCount: 2,
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+              childAspectRatio: 1.45,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: List.generate(
+                4,
+                (_) => const ShimmerLoading(width: double.infinity, height: 100, borderRadius: 16),
+              ),
+            )
+          else
+            GridView.count(
+              crossAxisCount: 2,
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+              childAspectRatio: 1.45,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _buildStatCard(
+                  context,
+                  title: 'In Progress',
+                  value: '$_activeJobsCount',
+                  icon: Icons.engineering_rounded,
+                  color: AppColors.statusInProgress,
+                  onTap: widget.onNavigateToWork,
+                ),
+                _buildStatCard(
+                  context,
+                  title: 'Completed Today',
+                  value: '$_completedTodayCount',
+                  icon: Icons.check_circle_rounded,
+                  color: AppColors.statusCompleted,
+                  onTap: widget.onNavigateToWork,
+                ),
+                _buildStatCard(
+                  context,
+                  title: 'Total Customers',
+                  value: '$_totalCustomersCount',
+                  icon: Icons.people_alt_rounded,
+                  color: AppColors.secondary,
+                  onTap: widget.onNavigateToCustomers,
+                ),
+                _buildStatCard(
+                  context,
+                  title: 'Pending Work',
+                  value: '$_pendingJobsCount',
+                  icon: Icons.hourglass_top_rounded,
+                  color: AppColors.statusPending,
+                  onTap: widget.onNavigateToWork,
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -221,15 +363,20 @@ class HomeTab extends StatelessWidget {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
+    return PressableScale(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          color: color.withValues(alpha: isDark ? 0.12 : 0.08),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: color.withValues(alpha: 0.3),
+            width: 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,28 +385,50 @@ class HomeTab extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(icon, color: color, size: 28),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 22),
+                ),
                 Text(
                   value,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
+                  style: AppTypography.displayMedium(color).copyWith(fontSize: 26),
                 ),
               ],
             ),
             Text(
               title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
-              ),
+              style: AppTypography.labelMedium(titleColor),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFinancialStat(String label, double amount, Color amountColor, bool isDark) {
+    final secondaryText = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(label, style: AppTypography.caption(secondaryText)),
+        const SizedBox(height: 6),
+        Text(
+          '₹${amount.toStringAsFixed(0)}',
+          style: AppTypography.titleLarge(amountColor).copyWith(fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFinancialDivider(bool isDark) {
+    return Container(
+      width: 1,
+      height: 40,
+      color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
     );
   }
 }

@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
+import '../../core/widgets/custom_badge.dart';
+import '../../core/widgets/custom_card.dart';
+import '../../core/widgets/custom_button.dart';
+import '../../core/widgets/custom_text_field.dart';
+import '../../core/widgets/empty_state_view.dart';
+import '../../core/widgets/glass_container.dart';
+import '../../core/widgets/shimmer_loading.dart';
 import 'job_details_screen.dart';
 
 class WorkTab extends StatefulWidget {
@@ -36,7 +46,6 @@ class _WorkTabState extends State<WorkTab> {
     }
 
     try {
-      // Fetch Jobs along with bill items for total amount
       final jobsData = await supabase
           .from('jobs')
           .select('*, bill_items(selling_price)')
@@ -49,7 +58,7 @@ class _WorkTabState extends State<WorkTab> {
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -58,6 +67,7 @@ class _WorkTabState extends State<WorkTab> {
 
   Future<void> _addJob({
     required Map<String, dynamic>? selectedCustomer,
+    String? customerNameInput,
     required String vehicleNo,
     required String modelName,
     required String workDescription,
@@ -70,7 +80,10 @@ class _WorkTabState extends State<WorkTab> {
       await supabase.from('jobs').insert({
         'shop_id': user.id,
         'customer_id': selectedCustomer?['id'],
-        'customer_name': selectedCustomer?['name'] ?? 'Walk-in Customer',
+        'customer_name': selectedCustomer?['name'] ?? 
+            (selectedCustomer == null && customerNameInput != null && customerNameInput.isNotEmpty 
+                ? customerNameInput 
+                : 'Walk-in Customer'),
         'customer_phone': selectedCustomer?['phone'] ?? '',
         'vehicle_no': vehicleNo,
         'model_name': modelName,
@@ -80,7 +93,10 @@ class _WorkTabState extends State<WorkTab> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Job created successfully!')),
+          const SnackBar(
+            content: Text('Job order created successfully!'),
+            backgroundColor: AppColors.statusCompleted,
+          ),
         );
         _fetchJobs();
       }
@@ -89,30 +105,8 @@ class _WorkTabState extends State<WorkTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to save job: ${error.message}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: AppColors.error,
           ),
-        );
-      }
-    }
-  }
-
-  Future<void> _updateJobStatus(dynamic jobId, String newStatus) async {
-    try {
-      await supabase
-          .from('jobs')
-          .update({'status': newStatus})
-          .eq('id', jobId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Job status updated to $newStatus')),
-        );
-        _fetchJobs();
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating status: $error')),
         );
       }
     }
@@ -123,14 +117,20 @@ class _WorkTabState extends State<WorkTab> {
       await supabase.from('jobs').delete().eq('id', jobId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Job order deleted.')),
+          const SnackBar(
+            content: Text('Job order deleted.'),
+            backgroundColor: AppColors.statusCompleted,
+          ),
         );
         _fetchJobs();
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting job: $error')),
+          SnackBar(
+            content: Text('Error deleting job: $error'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -139,23 +139,33 @@ class _WorkTabState extends State<WorkTab> {
   void _showAddJobDialog() {
     final formKey = GlobalKey<FormState>();
     Map<String, dynamic>? selectedCustomer;
+    TextEditingController? customerSearchController;
     final vehicleNoController = TextEditingController();
     final modelNameController = TextEditingController();
     final workController = TextEditingController();
 
+    List<Map<String, String>> customerVehicles = [];
+    bool isLoadingVehicles = false;
+    int selectedVehicleIndex = -1;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Padding(
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryText = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+            final secondaryText = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
+            return GlassContainer(
+              blur: 16,
+              opacity: 0.95,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                top: 28,
                 left: 24,
                 right: 24,
               ),
@@ -170,21 +180,18 @@ class _WorkTabState extends State<WorkTab> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Create New Job Order',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                            'Create Work Order',
+                            style: AppTypography.titleLarge(primaryText),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close),
+                            icon: const Icon(Icons.close_rounded),
                             onPressed: () => Navigator.pop(context),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
-                      // 1. Searchable Customer Field (Search results appear while typing)
+                      // Customer autocomplete search
                       Autocomplete<Map<String, dynamic>>(
                         displayStringForOption: (customer) =>
                             '${customer['name']} (${customer['phone']})',
@@ -205,24 +212,68 @@ class _WorkTabState extends State<WorkTab> {
                                 .select()
                                 .eq('shop_id', user.id)
                                 .or('name.ilike.%$query%,phone.ilike.%$query%')
-                                .limit(10);
+                                .limit(8);
 
                             return List<Map<String, dynamic>>.from(response);
                           } catch (_) {
                             return const Iterable<Map<String, dynamic>>.empty();
                           }
                         },
-                        onSelected: (Map<String, dynamic> selection) {
+                        onSelected: (Map<String, dynamic> selection) async {
                           setModalState(() {
                             selectedCustomer = selection;
+                            isLoadingVehicles = true;
+                            customerVehicles = [];
+                            selectedVehicleIndex = -1;
+                            vehicleNoController.clear();
+                            modelNameController.clear();
                           });
+
+                          try {
+                            final user = supabase.auth.currentUser;
+                            if (user != null) {
+                              final response = await supabase
+                                  .from('jobs')
+                                  .select('vehicle_no, model_name')
+                                  .eq('shop_id', user.id)
+                                  .eq('customer_id', selection['id']);
+
+                              final uniqueVehicles = <String, Map<String, String>>{};
+                              for (var job in response) {
+                                final vNo = (job['vehicle_no'] ?? '').toString().trim();
+                                final mName = (job['model_name'] ?? '').toString().trim();
+                                if (vNo.isNotEmpty && mName.isNotEmpty) {
+                                  final key = '$vNo|$mName';
+                                  uniqueVehicles[key] = {'vehicle_no': vNo, 'model_name': mName};
+                                }
+                              }
+
+                              setModalState(() {
+                                customerVehicles = uniqueVehicles.values.toList();
+                                if (customerVehicles.isNotEmpty) {
+                                  selectedVehicleIndex = 0;
+                                  vehicleNoController.text = customerVehicles[0]['vehicle_no'] ?? '';
+                                  modelNameController.text = customerVehicles[0]['model_name'] ?? '';
+                                } else {
+                                  selectedVehicleIndex = -1;
+                                }
+                                isLoadingVehicles = false;
+                              });
+                            }
+                          } catch (_) {
+                            setModalState(() {
+                              selectedVehicleIndex = -1;
+                              isLoadingVehicles = false;
+                            });
+                          }
                         },
                         optionsViewBuilder: (context, onSelected, options) {
                           return Align(
                             alignment: Alignment.topLeft,
                             child: Material(
-                              elevation: 6.0,
-                              borderRadius: BorderRadius.circular(12),
+                              elevation: 8.0,
+                              borderRadius: BorderRadius.circular(16),
+                              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
                               child: Container(
                                 constraints: const BoxConstraints(maxHeight: 200),
                                 width: MediaQuery.of(context).size.width - 48,
@@ -233,15 +284,21 @@ class _WorkTabState extends State<WorkTab> {
                                   itemBuilder: (BuildContext context, int index) {
                                     final option = options.elementAt(index);
                                     return ListTile(
-                                      leading: const Icon(Icons.person, color: Colors.deepPurple),
+                                      leading: CircleAvatar(
+                                        backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                                        child: const Icon(Icons.person_rounded, color: AppColors.primary, size: 20),
+                                      ),
                                       title: Text(
                                         option['name'] ?? '',
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                        style: AppTypography.titleSmall(primaryText),
                                       ),
-                                      subtitle: Text(option['phone'] ?? ''),
-                                      onTap: () {
-                                        onSelected(option);
-                                      },
+                                      subtitle: Text(
+                                        option['phone'] ?? '',
+                                        style: AppTypography.bodySmall(
+                                          isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                        ),
+                                      ),
+                                      onTap: () => onSelected(option),
                                     );
                                   },
                                 ),
@@ -249,48 +306,171 @@ class _WorkTabState extends State<WorkTab> {
                             ),
                           );
                         },
-                        fieldViewBuilder: (context, textEditingController, focusNode,
-                            onFieldSubmitted) {
-                          return TextFormField(
+                        fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                          customerSearchController = textEditingController;
+                          return CustomTextField(
                             controller: textEditingController,
                             focusNode: focusNode,
-                            onChanged: (val) {
-                              if (val.trim().isEmpty) {
+                            label: 'Customer (Name or Phone)',
+                            hint: 'Type customer name to search...',
+                            prefixIcon: Icons.search_rounded,
+                            onChanged: (value) {
+                              if (selectedCustomer != null) {
                                 setModalState(() {
                                   selectedCustomer = null;
+                                  customerVehicles = [];
+                                  selectedVehicleIndex = -1;
+                                  vehicleNoController.clear();
+                                  modelNameController.clear();
                                 });
                               }
                             },
-                            decoration: InputDecoration(
-                              labelText: 'Search Customer (Name or Phone) *',
-                              hintText: 'Type to search customer...',
-                              prefixIcon: const Icon(Icons.search),
-                              suffixIcon: selectedCustomer != null
-                                  ? const Icon(Icons.check_circle, color: Colors.green)
-                                  : null,
-                              border: const OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              if (selectedCustomer == null &&
-                                  (value == null || value.trim().isEmpty)) {
-                                return 'Please search & select a customer';
-                              }
-                              return null;
-                            },
+                            suffixIcon: selectedCustomer != null
+                                ? const Icon(Icons.check_circle_rounded, color: AppColors.statusCompleted)
+                                : null,
                           );
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
 
-                      // 2. Vehicle Number
-                      TextFormField(
-                        controller: vehicleNoController,
-                        decoration: const InputDecoration(
-                          labelText: 'Vehicle Number *',
-                          hintText: 'e.g., KA-05-AB-1234',
-                          prefixIcon: Icon(Icons.confirmation_number_outlined),
-                          border: OutlineInputBorder(),
+                      if (isLoadingVehicles)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12.0),
+                          child: Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2.5),
+                            ),
+                          ),
+                        )
+                      else if (selectedCustomer != null && customerVehicles.isNotEmpty) ...[
+                        Text(
+                          'Previously Serviced Vehicles',
+                          style: AppTypography.labelMedium(secondaryText),
                         ),
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ...List.generate(customerVehicles.length, (index) {
+                                final v = customerVehicles[index];
+                                final isSelected = selectedVehicleIndex == index;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () {
+                                      setModalState(() {
+                                        selectedVehicleIndex = index;
+                                        vehicleNoController.text = v['vehicle_no'] ?? '';
+                                        modelNameController.text = v['model_name'] ?? '';
+                                      });
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? AppColors.primary
+                                            : (isDark ? AppColors.darkSurfaceSecondary : AppColors.lightSurfaceSecondary),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? AppColors.primary
+                                              : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                                          width: isSelected ? 1.5 : 1.0,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.directions_car_rounded,
+                                            size: 16,
+                                            color: isSelected ? Colors.white : AppColors.primary,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '${v['model_name']} (${v['vehicle_no']})',
+                                            style: AppTypography.bodySmall(
+                                              isSelected ? Colors.white : primaryText,
+                                            ).copyWith(
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () {
+                                  setModalState(() {
+                                    selectedVehicleIndex = -1;
+                                    vehicleNoController.clear();
+                                    modelNameController.clear();
+                                  });
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: selectedVehicleIndex == -1
+                                        ? AppColors.primary
+                                        : (isDark ? AppColors.darkSurfaceSecondary : AppColors.lightSurfaceSecondary),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: selectedVehicleIndex == -1
+                                          ? AppColors.primary
+                                          : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                                      width: selectedVehicleIndex == -1 ? 1.5 : 1.0,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.add_rounded,
+                                        size: 16,
+                                        color: selectedVehicleIndex == -1 ? Colors.white : AppColors.primary,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'New Vehicle',
+                                        style: AppTypography.bodySmall(
+                                          selectedVehicleIndex == -1 ? Colors.white : primaryText,
+                                        ).copyWith(
+                                          fontWeight: selectedVehicleIndex == -1 ? FontWeight.bold : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      CustomTextField(
+                        controller: vehicleNoController,
+                        label: 'Vehicle Registration Number',
+                        hint: 'e.g., KA-05-AB-1234',
+                        prefixIcon: Icons.confirmation_number_outlined,
+                        textCapitalization: TextCapitalization.characters,
+                        inputFormatters: [
+                          TextInputFormatter.withFunction(
+                            (oldValue, newValue) => TextEditingValue(
+                              text: newValue.text.toUpperCase(),
+                              selection: newValue.selection,
+                            ),
+                          ),
+                        ],
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Please enter vehicle number';
@@ -298,17 +478,13 @@ class _WorkTabState extends State<WorkTab> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
 
-                      // 3. Model Name
-                      TextFormField(
+                      CustomTextField(
                         controller: modelNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Model Name *',
-                          hintText: 'e.g., Swift Dzire / Royal Enfield',
-                          prefixIcon: Icon(Icons.directions_car_outlined),
-                          border: OutlineInputBorder(),
-                        ),
+                        label: 'Vehicle Model',
+                        hint: 'e.g., Swift Dzire / Royal Enfield',
+                        prefixIcon: Icons.directions_car_outlined,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Please enter vehicle model';
@@ -316,52 +492,40 @@ class _WorkTabState extends State<WorkTab> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
 
-                      // 4. Work Description
-                      TextFormField(
+                      CustomTextField(
                         controller: workController,
+                        label: 'Work Description / Requirements',
+                        hint: 'e.g., Engine oil change, brake servicing',
+                        prefixIcon: Icons.build_circle_outlined,
                         maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Work / Issue Description *',
-                          hintText: 'e.g., Engine oil change, brake servicing',
-                          prefixIcon: Icon(Icons.build_outlined),
-                          border: OutlineInputBorder(),
-                        ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Please describe the work to be done';
+                            return 'Please describe the work required';
                           }
                           return null;
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 28),
 
-                      const SizedBox(height: 20),
-
-                      // Submit Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            if (formKey.currentState!.validate()) {
-                              _addJob(
-                                selectedCustomer: selectedCustomer,
-                                vehicleNo: vehicleNoController.text.trim(),
-                                modelName: modelNameController.text.trim(),
-                                workDescription: workController.text.trim(),
-                                status: 'Pending',
-                              );
-                              Navigator.pop(context);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          child: const Text('Create Job Order'),
-                        ),
+                      CustomButton(
+                        label: 'Create Work Order',
+                        icon: Icons.add_task_rounded,
+                        onPressed: () {
+                          if (formKey.currentState!.validate()) {
+                            _addJob(
+                              selectedCustomer: selectedCustomer,
+                              customerNameInput: customerSearchController?.text.trim(),
+                              vehicleNo: vehicleNoController.text.trim(),
+                              modelName: modelNameController.text.trim(),
+                              workDescription: workController.text.trim(),
+                              status: 'Pending',
+                            );
+                            Navigator.pop(context);
+                          }
+                        },
                       ),
-                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -373,330 +537,308 @@ class _WorkTabState extends State<WorkTab> {
     );
   }
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Completed':
-        return Colors.green;
-      case 'In Progress':
-        return Colors.orange;
-      case 'Pending':
-      default:
-        return Colors.blue;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryText = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+    final secondaryText = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
     final searchQuery = _searchController.text.trim().toLowerCase();
 
     final filteredJobs = _jobs.where((job) {
-      final status = job['status'] ?? '';
-      
+      final status = (job['status'] ?? '').toString();
       bool statusMatches = false;
       if (_showCompleted) {
         statusMatches = (status == 'Completed');
       } else {
-        statusMatches = (status == 'Pending' || status == 'In Progress');
+        statusMatches = (status == 'Pending' || status == 'In Progress' || status == 'Ready');
       }
-      
+
       if (!statusMatches) return false;
 
       if (_showCompleted && searchQuery.isNotEmpty) {
         final custName = (job['customer_name'] ?? '').toString().toLowerCase();
         final vehName = (job['model_name'] ?? '').toString().toLowerCase();
         final vehNo = (job['vehicle_no'] ?? '').toString().toLowerCase();
-        
+
         return custName.contains(searchQuery) ||
-               vehName.contains(searchQuery) ||
-               vehNo.contains(searchQuery);
+            vehName.contains(searchQuery) ||
+            vehNo.contains(searchQuery);
       }
-      
+
       return true;
     }).toList();
 
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with Create Button
+          // Header with Create Action
+          Text(
+            _showCompleted
+                ? 'Completed Works (${filteredJobs.length})'
+                : 'Active Work Orders (${filteredJobs.length})',
+            style: AppTypography.titleLarge(primaryText),
+          ),
+          const SizedBox(height: 14),
+
+          // Segmented filter toggle
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _showCompleted ? 'Completed Works (${filteredJobs.length})' : 'Ongoing Work (${filteredJobs.length})',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+              Expanded(
+                child: CustomButton(
+                  label: 'Ongoing Work',
+                  isOutline: _showCompleted,
+                  onPressed: () {
+                    if (_showCompleted) {
+                      setState(() {
+                        _showCompleted = false;
+                        _searchController.clear();
+                      });
+                    }
+                  },
+                ),
               ),
-              ElevatedButton.icon(
-                onPressed: _showAddJobDialog,
-                icon: const Icon(Icons.add_task, size: 18),
-                label: const Text('New Job'),
+              const SizedBox(width: 12),
+              Expanded(
+                child: CustomButton(
+                  label: 'Completed',
+                  isOutline: !_showCompleted,
+                  onPressed: () {
+                    if (!_showCompleted) {
+                      setState(() => _showCompleted = true);
+                    }
+                  },
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // Toggle Completed Works Button
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _showCompleted = !_showCompleted;
-                  if (!_showCompleted) {
-                    _searchController.clear();
-                  }
-                });
-              },
-              icon: Icon(_showCompleted ? Icons.arrow_back : Icons.task_alt),
-              label: Text(_showCompleted ? 'Back to Ongoing Work' : 'Show Completed Works'),
-            ),
-          ),
           if (_showCompleted) ...[
-            const SizedBox(height: 12),
-            TextField(
+            const SizedBox(height: 14),
+            CustomTextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search completed works',
-                hintText: 'Customer, Vehicle Model or Number',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              onChanged: (val) {
-                setState(() {});
-              },
+              label: '',
+              hint: 'Search completed works by vehicle or customer...',
+              prefixIcon: Icons.search_rounded,
+              onChanged: (_) => setState(() {}),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
-          // Jobs List View
+          // List view with loading skeleton & empty state
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const ShimmerListSkeleton(itemCount: 5)
                 : filteredJobs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.build_circle_outlined,
-                                size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 12),
-                            Text(
-                              _showCompleted
-                                  ? 'No completed works found.'
-                                  : 'No ongoing works found.',
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ],
-                        ),
+                    ? EmptyStateView(
+                        icon: _showCompleted ? Icons.task_alt_rounded : Icons.build_circle_outlined,
+                        title: _showCompleted ? 'No Completed Works' : 'No Active Work Orders',
+                        description: _showCompleted
+                            ? 'Completed jobs will appear here after status updates.'
+                            : 'Tap "New Work Order" to create your first workshop job order.',
+                        actionLabel: _showCompleted ? null : 'Create Work Order',
+                        onAction: _showCompleted ? null : _showAddJobDialog,
                       )
                     : RefreshIndicator(
                         onRefresh: _fetchJobs,
-                        child: ListView.builder(
+                        color: AppColors.primary,
+                        child: ListView.separated(
                           itemCount: filteredJobs.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 14),
                           itemBuilder: (context, index) {
                             final job = filteredJobs[index];
-                            final customerName =
-                                job['customer_name'] ?? 'Unknown Customer';
+                            final customerName = job['customer_name'] ?? 'Walk-in Customer';
                             final customerPhone = job['customer_phone'] ?? '';
                             final vehicleNo = job['vehicle_no'] ?? '';
                             final modelName = job['model_name'] ?? '';
                             final workDesc = job['work_description'] ?? '';
                             final statusStr = job['status'] ?? 'Pending';
                             final jobId = job['id'];
-                            final statusColor = _getStatusColor(statusStr);
 
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(14),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => JobDetailsScreen(
-                                        job: job,
-                                        onJobUpdated: _fetchJobs,
-                                      ),
+                            final billItems = (job['bill_items'] as List?) ?? [];
+                            final double totalAmount = billItems.fold(0.0, (sum, item) {
+                              final price = double.tryParse(item['selling_price'].toString()) ?? 0.0;
+                              return sum + price;
+                            });
+
+                            final amountPaid =
+                                double.tryParse(job['amount_paid']?.toString() ?? '0') ?? 0.0;
+                            final balance = totalAmount - amountPaid;
+
+                            return CustomCard(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  PageRouteBuilder(
+                                    pageBuilder: (_, __, ___) => JobDetailsScreen(
+                                      job: job,
+                                      onJobUpdated: _fetchJobs,
                                     ),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    transitionsBuilder: (_, a, __, c) => FadeTransition(
+                                      opacity: a,
+                                      child: c,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              '$modelName ($vehicleNo)',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: statusColor
-                                                  .withValues(alpha: 0.15),
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
-                                            child: Text(
-                                              statusStr,
-                                              style: TextStyle(
-                                                color: statusColor,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.person,
-                                              size: 16, color: Colors.grey),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            customerName,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w600),
-                                          ),
-                                          if (customerPhone.isNotEmpty) ...[
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              '($customerPhone)',
-                                              style: const TextStyle(
-                                                  color: Colors.grey, fontSize: 13),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.withValues(alpha: 0.08),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          workDesc,
-                                          style: TextStyle(
-                                            color: Colors.grey[800],
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      (() {
-                                        final billItems = (job['bill_items'] as List?) ?? [];
-                                        final double totalAmount = billItems.fold(0.0, (sum, item) {
-                                          final price = double.tryParse(item['selling_price'].toString()) ?? 0.0;
-                                          return sum + price;
-                                        });
-                                        
-                                        final amountPaid = double.tryParse(job['amount_paid']?.toString() ?? '0') ?? 0.0;
-                                        final balance = totalAmount - amountPaid;
-
-                                        return Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      Expanded(
+                                        child: Row(
                                           children: [
-                                            Row(
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                      horizontal: 10, vertical: 6),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.green.withValues(alpha: 0.12),
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    border: Border.all(
-                                                        color: Colors.green.withValues(alpha: 0.3)),
-                                                  ),
-                                                  child: Row(
-                                                    children: [
-                                                      const Text(
-                                                        'Bill: ',
-                                                        style: TextStyle(
-                                                            fontSize: 12, color: Colors.grey),
-                                                      ),
-                                                      Text(
-                                                        '₹${totalAmount.toStringAsFixed(2)}',
-                                                        style: const TextStyle(
-                                                          fontWeight: FontWeight.bold,
-                                                          fontSize: 14,
-                                                          color: Colors.green,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                if (balance > 0)
-                                                  Container(
-                                                    margin: const EdgeInsets.only(left: 8),
-                                                    padding: const EdgeInsets.symmetric(
-                                                        horizontal: 10, vertical: 6),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.redAccent.withValues(alpha: 0.12),
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      border: Border.all(
-                                                          color: Colors.redAccent.withValues(alpha: 0.3)),
-                                                    ),
-                                                    child: Row(
-                                                      children: [
-                                                        const Text(
-                                                          'Bal: ',
-                                                          style: TextStyle(
-                                                              fontSize: 12, color: Colors.grey),
-                                                        ),
-                                                        Text(
-                                                          '₹${balance.toStringAsFixed(2)}',
-                                                          style: const TextStyle(
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 14,
-                                                            color: Colors.redAccent,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                              ],
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primary.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: const Icon(
+                                                Icons.directions_car_rounded,
+                                                color: AppColors.primary,
+                                                size: 20,
+                                              ),
                                             ),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete_outline,
-                                                  color: Colors.red, size: 20),
-                                              onPressed: () {
-                                                if (jobId != null) {
-                                                  _deleteJob(jobId);
-                                                }
-                                              },
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    modelName,
+                                                    style: AppTypography.titleMedium(primaryText),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  Text(
+                                                    vehicleNo,
+                                                    style: AppTypography.labelMedium(secondaryText),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                           ],
-                                        );
-                                      }()),
+                                        ),
+                                      ),
+                                      CustomBadge(status: statusStr),
                                     ],
                                   ),
-                                ),
+                                  const SizedBox(height: 14),
+
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.person_outline_rounded,
+                                        size: 16,
+                                        color: AppColors.primary,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        customerName,
+                                        style: AppTypography.labelLarge(primaryText),
+                                      ),
+                                      if (customerPhone.isNotEmpty) ...[
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '($customerPhone)',
+                                          style: AppTypography.bodySmall(secondaryText),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? AppColors.darkSurfaceSecondary
+                                          : AppColors.lightSurfaceSecondary,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      workDesc,
+                                      style: AppTypography.bodyMedium(secondaryText),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.statusCompleted
+                                                  .withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: AppColors.statusCompleted
+                                                    .withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              'Total: ₹${totalAmount.toStringAsFixed(2)}',
+                                              style: AppTypography.labelMedium(
+                                                AppColors.statusCompleted,
+                                              ),
+                                            ),
+                                          ),
+                                          if (balance > 0) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.error.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: AppColors.error.withValues(alpha: 0.3),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                'Bal: ₹${balance.toStringAsFixed(2)}',
+                                                style: AppTypography.labelMedium(AppColors.error),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      if (statusStr != 'Completed')
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: AppColors.error,
+                                            size: 20,
+                                          ),
+                                          onPressed: () {
+                                            if (jobId != null) {
+                                              _deleteJob(jobId);
+                                            }
+                                          },
+                                        ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             );
                           },
                         ),
                       ),
+          ),
+          const SizedBox(height: 12),
+          CustomButton(
+            label: 'Create New Work Order',
+            icon: Icons.add_rounded,
+            onPressed: _showAddJobDialog,
           ),
         ],
       ),

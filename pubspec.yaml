@@ -15,11 +15,28 @@ dependencies:
   pdf: ^3.13.1
   printing: ^5.15.1
   url_launcher: ^6.3.2
+  fl_chart: ^1.2.0
+  google_fonts: ^8.2.1
+  path_provider: ^2.1.6
+  syncfusion_flutter_xlsio: ^34.2.9
+  shared_preferences: ^2.5.5
   
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/app_logo.png
+
+dependency_overrides:
+  objective_c: 9.0.0
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: false
+  image_path: "assets/images/app_logo.png"
+  min_sdk_android: 21
