@@ -53,6 +53,7 @@ class ProfileTab extends StatelessWidget {
     final user = supabase.auth.currentUser;
     final shopName = shopDetails?['shop_name'] ?? 'My Workshop';
     final location = shopDetails?['location'] ?? 'Location not set';
+    final locationUrl = shopDetails?['location_url'] ?? 'No Google Maps link set';
     final phone = shopDetails?['phone'] ?? 'No phone added';
     final email = shopDetails?['email'] ?? user?.email ?? 'No email';
 
@@ -106,6 +107,13 @@ class ProfileTab extends StatelessWidget {
                   icon: Icons.location_on_outlined,
                   title: 'Location / Address',
                   value: location,
+                  isDark: isDark,
+                ),
+                Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                _buildInfoTile(
+                  icon: Icons.map_outlined,
+                  title: 'Google Maps Location',
+                  value: locationUrl,
                   isDark: isDark,
                 ),
                 Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),

@@ -21,6 +21,7 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _shopNameController = TextEditingController();
   final _locationController = TextEditingController();
+  final _locationUrlController = TextEditingController();
   final _phoneController = TextEditingController();
   late final TextEditingController _emailController;
 
@@ -35,6 +36,7 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
     if (widget.initialData != null) {
       _shopNameController.text = widget.initialData!['shop_name'] ?? '';
       _locationController.text = widget.initialData!['location'] ?? '';
+      _locationUrlController.text = widget.initialData!['location_url'] ?? '';
       _phoneController.text = widget.initialData!['phone'] ?? '';
     }
   }
@@ -55,6 +57,7 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
         'email': _emailController.text.trim(),
         'shop_name': _shopNameController.text.trim(),
         'location': _locationController.text.trim(),
+        'location_url': _locationUrlController.text.trim(),
         'phone': _phoneController.text.trim(),
         'updated_at': DateTime.now().toIso8601String(),
       });
@@ -102,6 +105,7 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
   void dispose() {
     _shopNameController.dispose();
     _locationController.dispose();
+    _locationUrlController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     super.dispose();
@@ -213,6 +217,15 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
                             }
                             return null;
                           },
+                        ),
+                        const SizedBox(height: 18),
+
+                        CustomTextField(
+                          controller: _locationUrlController,
+                          label: 'Google Maps Location URL (Optional)',
+                          hint: 'e.g., https://maps.app.goo.gl/...',
+                          prefixIcon: Icons.map_outlined,
+                          keyboardType: TextInputType.url,
                         ),
                         const SizedBox(height: 18),
 

@@ -49,6 +49,7 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
   String _shopPhone = '';
   int _localJobCount = 0;
   String _meterReading = '';
+  String _vin = '';
 
   @override
   void initState() {
@@ -63,6 +64,7 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
     _paymentMode = widget.job['payment_mode'] ?? 'Cash';
     final meterRaw = widget.job['meter_reading']?.toString() ?? '';
     _meterReading = meterRaw.isEmpty ? '0' : meterRaw;
+    _vin = widget.job['vin']?.toString() ?? '';
     _fetchBillItems();
     _fetchShopData();
     _fetchLocalJobCount();
@@ -141,6 +143,97 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
               onPressed: () {
                 if (formKey.currentState!.validate()) {
                   _updateMeterReading(controller.text.trim());
+                  Navigator.pop(context);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _updateVin(String newVin) async {
+    final jobId = widget.job['id'];
+    if (jobId == null) return;
+    
+    setState(() => _isSavingJob = true);
+    try {
+      await supabase.from('jobs').update({
+        'vin': newVin,
+      }).eq('id', jobId);
+      
+      setState(() {
+        _vin = newVin;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Chassis Number updated successfully!'),
+            backgroundColor: AppColors.statusCompleted,
+          ),
+        );
+      }
+      widget.onJobUpdated();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update Chassis Number: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingJob = false);
+    }
+  }
+
+  void _showEditVinDialog() {
+    final controller = TextEditingController(text: _vin);
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Update Chassis Number'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CustomTextField(
+                  controller: controller,
+                  label: 'Chassis Number (VIN)',
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    TextInputFormatter.withFunction(
+                      (oldValue, newValue) => TextEditingValue(
+                        text: newValue.text.toUpperCase(),
+                        selection: newValue.selection,
+                      ),
+                    ),
+                  ],
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) return 'Please enter a Chassis Number';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            CustomButton(
+              label: 'Update',
+              isFullWidth: false,
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  _updateVin(controller.text.trim());
                   Navigator.pop(context);
                 }
               },
@@ -696,6 +789,7 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
       final user = supabase.auth.currentUser;
       final shopData = await supabase.from('shops').select().eq('id', user?.id ?? '').maybeSingle();
       final shopName = shopData?['shop_name'] ?? 'our workshop';
+      final locationUrl = shopData?['location_url']?.toString() ?? '';
       final vehicleNo = widget.job['vehicle_no'] ?? '';
       final total = _totalSellingPrice.toStringAsFixed(0);
       final workDesc = _workController.text.trim();
@@ -703,7 +797,11 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
       String extraDetails = '';
       if (workDesc.isNotEmpty) extraDetails += '\nWork Details: $workDesc\n';
 
-      final message = 'Hello! Thank you for choosing $shopName.\nYour vehicle ($vehicleNo) work is completed.\n$extraDetails\nYour total bill amount is Rs. $total.\n\nYou can download your invoice securely here:\n$shortPdfUrl\n\nHave a great day!';
+      String message = 'Hello! Thank you for choosing $shopName.\nYour vehicle ($vehicleNo) work is completed.\n$extraDetails\nYour total bill amount is Rs. $total.\n\nYou can download your invoice securely here:\n$shortPdfUrl\n\nHave a great day!';
+
+      if (locationUrl.isNotEmpty) {
+        message += '\n\nPlease leave us your feedback on Google Maps, your feedback matters to us!\n$locationUrl';
+      }
 
       final appUrl = Uri.parse('whatsapp://send?phone=$cleanPhone&text=${Uri.encodeComponent(message)}');
       final webUrl = Uri.parse('https://wa.me/$cleanPhone?text=${Uri.encodeComponent(message)}');
@@ -1145,6 +1243,32 @@ class _ShopDetailsScreenState extends State<JobDetailsScreen> {
                             icon: const Icon(Icons.edit_rounded, size: 20, color: AppColors.primary),
                             onPressed: _showEditMeterReadingDialog,
                             tooltip: 'Edit Odometer Reading',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (_vin.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.pin_rounded, size: 18, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Text('Chassis No: ', style: AppTypography.bodyMedium(secondaryText)),
+                            Text(_vin, style: AppTypography.titleSmall(primaryText)),
+                          ],
+                        ),
+                        if (_status != 'Completed')
+                          IconButton(
+                            icon: const Icon(Icons.edit_rounded, size: 20, color: AppColors.primary),
+                            onPressed: _showEditVinDialog,
+                            tooltip: 'Edit Chassis Number',
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                           ),

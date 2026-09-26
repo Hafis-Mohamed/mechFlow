@@ -73,6 +73,7 @@ class _WorkTabState extends State<WorkTab> {
     required String workDescription,
     required String status,
     String? meterReading,
+    String? vin,
   }) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
@@ -91,6 +92,7 @@ class _WorkTabState extends State<WorkTab> {
         'work_description': workDescription,
         'status': status,
         if (meterReading != null && meterReading.isNotEmpty) 'meter_reading': meterReading,
+        if (vin != null && vin.isNotEmpty) 'vin': vin,
       });
 
       if (mounted) {
@@ -145,6 +147,7 @@ class _WorkTabState extends State<WorkTab> {
     final vehicleNoController = TextEditingController();
     final modelNameController = TextEditingController();
     final meterReadingController = TextEditingController();
+    final vinController = TextEditingController();
     final workController = TextEditingController();
 
     List<Map<String, String>> customerVehicles = [];
@@ -230,6 +233,7 @@ class _WorkTabState extends State<WorkTab> {
                             selectedVehicleIndex = -1;
                             vehicleNoController.clear();
                             modelNameController.clear();
+                            vinController.clear();
                           });
 
                           try {
@@ -237,7 +241,7 @@ class _WorkTabState extends State<WorkTab> {
                             if (user != null) {
                               final response = await supabase
                                   .from('jobs')
-                                  .select('vehicle_no, model_name')
+                                  .select('vehicle_no, model_name, vin')
                                   .eq('shop_id', user.id)
                                   .eq('customer_id', selection['id']);
 
@@ -245,9 +249,10 @@ class _WorkTabState extends State<WorkTab> {
                               for (var job in response) {
                                 final vNo = (job['vehicle_no'] ?? '').toString().trim();
                                 final mName = (job['model_name'] ?? '').toString().trim();
+                                final vin = (job['vin'] ?? '').toString().trim();
                                 if (vNo.isNotEmpty && mName.isNotEmpty) {
                                   final key = '$vNo|$mName';
-                                  uniqueVehicles[key] = {'vehicle_no': vNo, 'model_name': mName};
+                                  uniqueVehicles[key] = {'vehicle_no': vNo, 'model_name': mName, 'vin': vin};
                                 }
                               }
 
@@ -257,6 +262,7 @@ class _WorkTabState extends State<WorkTab> {
                                   selectedVehicleIndex = 0;
                                   vehicleNoController.text = customerVehicles[0]['vehicle_no'] ?? '';
                                   modelNameController.text = customerVehicles[0]['model_name'] ?? '';
+                                  vinController.text = customerVehicles[0]['vin'] ?? '';
                                 } else {
                                   selectedVehicleIndex = -1;
                                 }
@@ -338,6 +344,7 @@ class _WorkTabState extends State<WorkTab> {
                                   selectedVehicleIndex = -1;
                                   vehicleNoController.clear();
                                   modelNameController.clear();
+                                  vinController.clear();
                                 });
                               }
                             },
@@ -382,6 +389,7 @@ class _WorkTabState extends State<WorkTab> {
                                         selectedVehicleIndex = index;
                                         vehicleNoController.text = v['vehicle_no'] ?? '';
                                         modelNameController.text = v['model_name'] ?? '';
+                                        vinController.text = v['vin'] ?? '';
                                       });
                                     },
                                     child: AnimatedContainer(
@@ -429,6 +437,7 @@ class _WorkTabState extends State<WorkTab> {
                                     selectedVehicleIndex = -1;
                                     vehicleNoController.clear();
                                     modelNameController.clear();
+                                    vinController.clear();
                                   });
                                 },
                                 child: AnimatedContainer(
@@ -533,6 +542,23 @@ class _WorkTabState extends State<WorkTab> {
                       const SizedBox(height: 16),
 
                       CustomTextField(
+                        controller: vinController,
+                        label: 'Chassis Number (VIN)',
+                        hint: 'e.g., MA1234567890',
+                        prefixIcon: Icons.pin_outlined,
+                        textCapitalization: TextCapitalization.characters,
+                        inputFormatters: [
+                          TextInputFormatter.withFunction(
+                            (oldValue, newValue) => TextEditingValue(
+                              text: newValue.text.toUpperCase(),
+                              selection: newValue.selection,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      CustomTextField(
                         controller: workController,
                         label: 'Work Description / Requirements',
                         hint: 'e.g., Engine oil change, brake servicing',
@@ -566,6 +592,7 @@ class _WorkTabState extends State<WorkTab> {
                               workDescription: workController.text.trim(),
                               status: 'Pending',
                               meterReading: meterReadingController.text.trim(),
+                              vin: vinController.text.trim(),
                             );
                             Navigator.pop(context);
                           }

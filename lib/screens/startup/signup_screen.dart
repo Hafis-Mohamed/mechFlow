@@ -34,9 +34,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final response = await supabase.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
+        emailRedirectTo: 'io.supabase.mechflow://login-callback',
       );
 
       if (mounted) {
+        // Supabase returns an empty identities list if the email is already registered
+        if (response.user != null && response.user!.identities != null && response.user!.identities!.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This email is already registered. Please log in.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          return;
+        }
+
         if (response.session == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
